@@ -20,12 +20,15 @@ int compare(const void *, const void *);
 
 // locks
 pthread_mutex_t bucket_locks = PTHREAD_MUTEX_INITIALIZER; // for blocking buckets
+pthread_cond_t myturn = PTHREAD_COND_INITIALIZER; // condition variable for threads to wait for their turn
+int thread_count = 0; // thread count to check whether equal to thread_id
 
 // global variables
 long size;  // size of the array
 unsigned int * intarr; // array of random integers
 unsigned int * intarr3; // array intarr3 for each worker threads selects p sample from it local sequence at indices.
 int thread_num; // thread number 
+long intarr3_index = 0;
 
 void * buckets (void *thread_ids){
 
@@ -43,7 +46,6 @@ void * buckets (void *thread_ids){
   // setup the size of intarr2
   intarr2 = (unsigned int *)malloc((up - down + 1)*sizeof(unsigned int)); 
 
-  pthread_mutex_lock(&bucket_locks);
 
   // sub intarr[] elements into intarr2[]
   for (long i = 0; i < (up - down + 1); i++){
@@ -64,7 +66,7 @@ void * buckets (void *thread_ids){
 
   for (long i=0; i<(up-down+1); i++) {
 
-    printf("intarr2[%ld]: %d\n", i, intarr2[i]);
+    printf("intarr2[%ld]: %d ; thread_id: %d\n", i, intarr2[i], *thread_id);
   }
 
   printf("\n\n");
@@ -72,12 +74,41 @@ void * buckets (void *thread_ids){
   if (!checking(intarr2, up-down+1)) {
     printf("The array is not in sorted order!!\n");
   }
-  else printf("The array is sorted!! \n");
+  else printf("The array is sorted!! \n\n");
+
+  pthread_mutex_lock(&bucket_locks);
+
+  printf("thread_count: %d ; thread_id: %d\n\n", thread_count, *thread_id);
+
+  while(thread_count != *thread_id){
+    printf("waiting\n\n");
+    pthread_cond_wait(&myturn, &bucket_locks);
+  }
+    
+
+  // each worker select thread_num samples from its 'local' sequence at indices
+  for (int i = 0; i < thread_num; i++){
+
+    int index = i*size/(thread_num * thread_num);
+    intarr3[intarr3_index] = intarr2[index];
+    
+    //printf("Thread number: %d ; i: %d ; size: %ld  ", thread_num, i, size);
+    printf("intarr3[%ld]: %d ; (i*size)/thread_num^2: %d\n", intarr3_index, intarr2[index], index);
+    intarr3_index++;
+  }
+
+  
+
 
   printf("I am thread %d. Range is %f, Down is %ld, Up is %ld\n", *thread_id, range, down, up);
   //printf("I am thread %d.\n", *thread_id);
 
+  // do broadcast
+  pthread_cond_broadcast(&myturn);
+  thread_count++;
+
   pthread_mutex_unlock(&bucket_locks);
+
   pthread_exit(NULL);
 
 }
@@ -126,8 +157,10 @@ int main (int argc, char **argv)
     //printf("thread id: %d\n", thread_ids[i]);
   }
 
-  // set the size of for instarr
+  // set the size of for instarr and intarr2
   intarr = (unsigned int *)malloc(size*sizeof(unsigned int));
+  intarr3 = (unsigned int *)malloc((thread_num * thread_num)*sizeof(unsigned int));
+
   // check whether malloc is used correctly
   if (intarr == NULL) {perror("malloc"); exit(0); }
   
@@ -196,7 +229,7 @@ int checking(unsigned int * list, long size) {
   printf("Last  : %d\n", list[size-1]);*/
   for (i=0; i<size-1; i++) {
 
-    printf("list[i]: %d ; list[i+1]: %d\n", list[i], list[i+1]);
+    //printf("list[i]: %d ; list[i+1]: %d\n", list[i], list[i+1]);
     if (list[i] > list[i+1]) {
       return 0;
     }
