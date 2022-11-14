@@ -22,12 +22,15 @@ int compare(const void *, const void *);
 pthread_mutex_t bucket_locks = PTHREAD_MUTEX_INITIALIZER; // for blocking buckets
 pthread_cond_t myturn = PTHREAD_COND_INITIALIZER; // condition variable for threads to wait for their turn
 int thread_count = 0; // thread count to check whether equal to thread_id
+int thread_count1 = 0; // thread count 1 to check whether equal to thread_id in phrase 1s
 
 // global variables
 long size;  // size of the array
 unsigned int * intarr; // array of random integers
 unsigned int * intarr3; // array intarr3 for each worker threads selects p sample from it local sequence at indices.
 unsigned int * intarr4; // array intarr4 to store p-1 pivot value from intarr3
+unsigned int * intarr5; // array intarr5 to store the ith partition and collects from other threads thier 1 partitions
+unsigned int * count; // store the value on or before ith partition
 int thread_num; // thread number 
 long intarr3_index = 0;
 
@@ -39,10 +42,12 @@ void * buckets (void *thread_ids){
 
   double range = (double)size/ (double)thread_num;
  
-  // get the up and down
+  // get the up, down and temp
   long down = (*thread_id) * range;
   long up = (*thread_id + 1) * range - 1;
   long temp = down;
+  // store the size into count[]
+  count[*thread_id] = up - down + 1; 
 
   // setup the size of intarr2
   intarr2 = (unsigned int *)malloc((up - down + 1)*sizeof(unsigned int)); 
@@ -58,9 +63,12 @@ void * buckets (void *thread_ids){
       temp++;
       
     }
-    else
-      break;   
+    else{
+      temp = down;
+      break; 
+    }
   }
+  temp = down;
 
   // using quick sort to sort intarr2
   qsort(intarr2, (up-down+1), sizeof(unsigned int), compare);
@@ -70,12 +78,32 @@ void * buckets (void *thread_ids){
     printf("intarr2[%ld]: %d ; thread_id: %d\n", i, intarr2[i], *thread_id);
   }
 
+  printf("Count: %d", count[*thread_id]);
+
   printf("\n\n");
 
   if (!checking(intarr2, up-down+1)) {
     printf("The array is not in sorted order!!\n");
   }
   else printf("The array is sorted!! \n\n");
+
+  // sub intarr2[] elements into intarr[]
+  for (long i = 0; i < (up - down + 1); i++){
+
+    if(temp <= up)
+    {
+      intarr[temp] = intarr2[i];
+      printf("intarr[%ld]: %d \n", i, intarr[temp]);
+      temp++;
+      
+    }
+    else{
+      temp = down;
+      break;  
+    }
+       
+  }
+
 
 
   printf("thread_count: %d ; thread_id: %d\n\n", thread_count, *thread_id);
@@ -111,11 +139,35 @@ void * buckets (void *thread_ids){
   pthread_mutex_lock(&bucket_locks);
 
   while(thread_count != thread_num + 1){
-    printf("thread %d is waiting again\n\n", *thread_id);
+    //printf("thread %d is waiting again\n\n", *thread_id);
+    pthread_cond_wait(&myturn, &bucket_locks);
+  }
+
+  while(thread_count1 != *thread_id){
+    //printf("thread %d is going to come back\n\n", *thread_id);
     pthread_cond_wait(&myturn, &bucket_locks);
   }
 
   printf("Thread %d come back\n", *thread_id);
+
+  // do broadcast
+  pthread_cond_broadcast(&myturn);
+  thread_count1++;
+
+  /*long stop = 0;
+
+  // create intarr5
+  intarr5 = (unsigned int *)malloc((*thread_id + 1)*sizeof(unsigned int));
+
+  for(long i = 0; i < *thread_id + 1; i++){
+    intarr5[i] = 123;
+  }
+
+  for(long i = 0; i < *thread_id + 1; i++){
+    printf("intarr5[%ld]: %d\n", i, intarr5[i]);
+  }*/
+
+
   
   pthread_mutex_unlock(&bucket_locks);
 
@@ -181,6 +233,7 @@ int main (int argc, char **argv)
   intarr = (unsigned int *)malloc(size*sizeof(unsigned int));
   intarr3 = (unsigned int *)malloc((thread_num * thread_num)*sizeof(unsigned int));
   intarr4 = (unsigned int *)malloc((thread_num - 1)*sizeof(unsigned int));
+  count = (unsigned int *)malloc(thread_num*sizeof(unsigned int));
 
   // check whether malloc is used correctly
   if (intarr == NULL) {perror("malloc"); exit(0); }
@@ -228,9 +281,14 @@ int main (int argc, char **argv)
   qsort(intarr3, thread_num*thread_num, sizeof(unsigned int), compare);
 
   // print out intarr3
-  for (int i = 0; i < thread_num * thread_num; i++){
+  /*for (int i = 0; i < thread_num * thread_num; i++){
     printf("intarr3[%d]: %d\n", i, intarr3[i]);
-  }
+  }*/
+
+  // print out intarr
+  /*for (i=0; i<size; i++) {
+    printf("intarr[%ld]: %d\n", i, intarr[i]);
+  }*/
 
   for (int i = 1; i < thread_num; i++){
 
