@@ -27,6 +27,7 @@ int thread_count = 0; // thread count to check whether equal to thread_id
 long size;  // size of the array
 unsigned int * intarr; // array of random integers
 unsigned int * intarr3; // array intarr3 for each worker threads selects p sample from it local sequence at indices.
+unsigned int * intarr4; // array intarr4 to store p-1 pivot value from intarr3
 int thread_num; // thread number 
 long intarr3_index = 0;
 
@@ -46,7 +47,7 @@ void * buckets (void *thread_ids){
   // setup the size of intarr2
   intarr2 = (unsigned int *)malloc((up - down + 1)*sizeof(unsigned int)); 
 
-
+  pthread_mutex_lock(&bucket_locks);
   // sub intarr[] elements into intarr2[]
   for (long i = 0; i < (up - down + 1); i++){
 
@@ -76,15 +77,15 @@ void * buckets (void *thread_ids){
   }
   else printf("The array is sorted!! \n\n");
 
-  pthread_mutex_lock(&bucket_locks);
 
   printf("thread_count: %d ; thread_id: %d\n\n", thread_count, *thread_id);
 
   while(thread_count != *thread_id){
-    printf("waiting\n\n");
+    printf("thread %d waiting\n\n", *thread_id);
     pthread_cond_wait(&myturn, &bucket_locks);
   }
-    
+
+  printf("Thread %d get back.\n", *thread_id);  
 
   // each worker select thread_num samples from its 'local' sequence at indices
   for (int i = 0; i < thread_num; i++){
@@ -93,12 +94,9 @@ void * buckets (void *thread_ids){
     intarr3[intarr3_index] = intarr2[index];
     
     //printf("Thread number: %d ; i: %d ; size: %ld  ", thread_num, i, size);
-    printf("intarr3[%ld]: %d ; (i*size)/thread_num^2: %d\n", intarr3_index, intarr2[index], index);
+    //printf("intarr3[%ld]: %d ; (i*size)/thread_num^2: %d\n", intarr3_index, intarr2[index], index);
     intarr3_index++;
   }
-
-  
-
 
   printf("I am thread %d. Range is %f, Down is %ld, Up is %ld\n", *thread_id, range, down, up);
   //printf("I am thread %d.\n", *thread_id);
@@ -108,6 +106,28 @@ void * buckets (void *thread_ids){
   thread_count++;
 
   pthread_mutex_unlock(&bucket_locks);
+
+  //step into phrase 3
+  pthread_mutex_lock(&bucket_locks);
+
+  while(thread_count != thread_num + 1){
+    printf("thread %d is waiting again\n\n", *thread_id);
+    pthread_cond_wait(&myturn, &bucket_locks);
+  }
+
+  printf("Thread %d come back\n", *thread_id);
+  
+  pthread_mutex_unlock(&bucket_locks);
+
+
+
+
+
+  
+
+
+
+  
 
   pthread_exit(NULL);
 
@@ -157,9 +177,10 @@ int main (int argc, char **argv)
     //printf("thread id: %d\n", thread_ids[i]);
   }
 
-  // set the size of for instarr and intarr2
+  // set the size of for instarr, intarr2 and intarr3
   intarr = (unsigned int *)malloc(size*sizeof(unsigned int));
   intarr3 = (unsigned int *)malloc((thread_num * thread_num)*sizeof(unsigned int));
+  intarr4 = (unsigned int *)malloc((thread_num - 1)*sizeof(unsigned int));
 
   // check whether malloc is used correctly
   if (intarr == NULL) {perror("malloc"); exit(0); }
@@ -194,13 +215,50 @@ int main (int argc, char **argv)
     pthread_create(&threads[i], NULL, buckets, (void *)&thread_ids[i]);
   }
 
-  // measure the end time
-  gettimeofday(&end, NULL);
+  pthread_mutex_lock(&bucket_locks);
+
+  //ensure phrase one finish before entering phrase two
+  while(thread_count != thread_num){
+    printf("main is waiting\n\n");
+    pthread_cond_wait(&myturn, &bucket_locks);
+  }
+
+  printf("the lock phrase one is finished\n\n");
+
+  qsort(intarr3, thread_num*thread_num, sizeof(unsigned int), compare);
+
+  // print out intarr3
+  for (int i = 0; i < thread_num * thread_num; i++){
+    printf("intarr3[%d]: %d\n", i, intarr3[i]);
+  }
+
+  for (int i = 1; i < thread_num; i++){
+
+    int t = i*thread_num + (thread_num/2) - 1;
+    //printf("t = %d\n", intarr3[t]);
+    intarr4[i-1] = intarr3[t];
+  }
+
+  for (int i = 0; i < thread_num - 1; i++){
+    printf("intarr4[%d]: %d\n", i, intarr4[i]);
+  }
+
+  thread_count++;
+
+  pthread_cond_broadcast(&myturn);
+
+  pthread_mutex_unlock(&bucket_locks);
+
 
   // join threads
   for (int i = 0; i < thread_num; i++){
     pthread_join(threads[i], NULL);
   }
+
+  // measure the end time
+  gettimeofday(&end, NULL);
+
+
 
   pthread_mutex_destroy(&bucket_locks);
 
