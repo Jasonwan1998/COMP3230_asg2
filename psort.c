@@ -30,9 +30,11 @@ unsigned int * intarr; // array of random integers
 unsigned int * intarr3; // array intarr3 for each worker threads selects p sample from it local sequence at indices.
 unsigned int * intarr4; // array intarr4 to store p-1 pivot value from intarr3
 unsigned int * intarr5; // array intarr5 to store the ith partition and collects from other threads thier 1 partitions
+unsigned int * intarr6; // array intarr6 to store all sorted element.
 unsigned int * count; // store the value on or before ith partition
 int thread_num; // thread number 
 long intarr3_index = 0;
+long temp2 = 0; // store the index of intarr[] when put back intarr5[] into intarr[] 
 
 void * buckets (void *thread_ids){
 
@@ -82,10 +84,10 @@ void * buckets (void *thread_ids){
 
   printf("\n\n");
 
-  if (!checking(intarr2, up-down+1)) {
+  /*if (!checking(intarr2, up-down+1)) {
     printf("The array is not in sorted order!!\n");
   }
-  else printf("The array is sorted!! \n\n");
+  else printf("The array is sorted!! \n\n");*/
 
   // sub intarr2[] elements into intarr[]
   for (long i = 0; i < (up - down + 1); i++){
@@ -290,30 +292,28 @@ void * buckets (void *thread_ids){
 
   qsort(intarr5, intarr5_size, sizeof(unsigned int), compare);
 
+  // print out sorted intarr5[];
   for (int i = 0; i < intarr5_size; i++){
     printf("intarr5[%d]: %d\n", i, intarr5[i]);
   }
 
+  //printf("temp2: %ld\n", temp2);
+  // sub intarr5[] elements into intarr[]
+  for (long i = 0; i < intarr5_size; i++){
 
+      //printf("intarr5[]: %d\n", intarr5[i]);
+      intarr6[temp2] = intarr5[i];
+      printf("intarr5[%ld]: %d \n", temp2, intarr6[temp2]);
+      temp2++;  
+  }
 
   // do broadcast
   pthread_cond_broadcast(&myturn);
   thread_count1++;
 
-
-
-  
   pthread_mutex_unlock(&bucket_locks);
 
-
-
-
-
-  
-
-
-
-  
+  free(intarr2);
 
   pthread_exit(NULL);
 
@@ -367,6 +367,7 @@ int main (int argc, char **argv)
   intarr = (unsigned int *)malloc(size*sizeof(unsigned int));
   intarr3 = (unsigned int *)malloc((thread_num * thread_num)*sizeof(unsigned int));
   intarr4 = (unsigned int *)malloc((thread_num - 1)*sizeof(unsigned int));
+  intarr6 = (unsigned int *)malloc(size*sizeof(unsigned int));
   count = (unsigned int *)malloc(thread_num*sizeof(unsigned int));
 
   // check whether malloc is used correctly
@@ -456,14 +457,19 @@ int main (int argc, char **argv)
   pthread_mutex_destroy(&bucket_locks);
 
   
-  // check whether intarr is in sorted order
-  if (!checking(intarr, size)) {
+  // check whether intar6 is in sorted order
+  if (!checking(intarr6, size)) {
     printf("The array is not in sorted order!!\n");
   }
   
   printf("Total elapsed time: %.4f s\n\n", (end.tv_sec - start.tv_sec)*1.0 + (end.tv_usec - start.tv_usec)/1000000.0);
     
   free(intarr);
+  free(intarr3);
+  free(intarr4);
+  free(intarr5);
+  free(intarr6);
+  pthread_cond_destroy(&myturn);
   return 0;
 }
 
@@ -473,11 +479,11 @@ int compare(const void * a, const void * b) {
 
 int checking(unsigned int * list, long size) {
   long i;
-  /*printf("First : %d\n", list[0]);
+  printf("First : %d\n", list[0]);
   printf("At 25%%: %d\n", list[size/4]);
   printf("At 50%%: %d\n", list[size/2]);
   printf("At 75%%: %d\n", list[3*size/4]);
-  printf("Last  : %d\n", list[size-1]);*/
+  printf("Last  : %d\n", list[size-1]);
   for (i=0; i<size-1; i++) {
 
     //printf("list[i]: %d ; list[i+1]: %d\n", list[i], list[i+1]);
