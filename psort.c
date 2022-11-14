@@ -42,10 +42,14 @@ void * buckets (void *thread_ids){
 
   double range = (double)size/ (double)thread_num;
  
-  // get the up, down and temp
+  // get the up, down, temp amd intarr5_size
   long down = (*thread_id) * range;
   long up = (*thread_id + 1) * range - 1;
   long temp = down;
+  long intarr5_size = 0;
+  long base = 0;
+  int partition = 0;
+  int intarr5_index = 0;
   // store the size into count[]
   count[*thread_id] = up - down + 1; 
 
@@ -62,10 +66,6 @@ void * buckets (void *thread_ids){
       //printf("intarr2[%ld]: %d     temp: %ld\n", i, intarr2[i], temp);
       temp++;
       
-    }
-    else{
-      temp = down;
-      break; 
     }
   }
   temp = down;
@@ -93,13 +93,9 @@ void * buckets (void *thread_ids){
     if(temp <= up)
     {
       intarr[temp] = intarr2[i];
-      printf("intarr[%ld]: %d \n", i, intarr[temp]);
+      printf("intarr[%ld]: %d \n", temp, intarr[temp]);
       temp++;
       
-    }
-    else{
-      temp = down;
-      break;  
     }
        
   }
@@ -150,22 +146,160 @@ void * buckets (void *thread_ids){
 
   printf("Thread %d come back\n", *thread_id);
 
+  partition = *thread_id; // understand which partition 
+
+  // find out the elements of each partition in different threads
+  for (int i = 0; i < thread_num; i++){ // know the thread number
+
+    if (i == 0){ // when thread is 0
+
+      for (long a = 0; a < count[i]; a++){ // loop in thread 0 from 0 
+        
+        if (partition == 0){ // if partition == 0;
+
+          if (intarr[a] <= intarr4[partition]){ 
+            //printf("intarr[%ld] A1: %d\n", a, intarr[a]);
+            intarr5_size++;
+          }
+        }
+        else if (partition > 0){
+
+          if (partition == thread_num - 1){
+            if (intarr[a] > intarr4[partition - 1]){
+              //printf("intarr[%ld] B11: %d\n", a, intarr[a]);
+              intarr5_size++;
+            }
+          }
+          else {
+            if (intarr[a] > intarr4[partition - 1] && intarr[a] <= intarr4[partition]){
+              //printf("intarr[%ld] B1: %d\n", a, intarr[a]);
+              intarr5_size++;
+            }
+          }
+        }
+      }
+
+      base = base + count[i];
+
+    }
+    else if (i > 0){
+      
+      for (long a = base; a < base + count[i]; a++){ //loop in thread 1 or more
+
+        if (partition == 0){
+
+          if (intarr[a] <= intarr4[partition]){ 
+            //printf("intarr[%ld] A2: %d\n", a, intarr[a]);
+            intarr5_size++;
+          }
+        }
+        else if (partition > 0){
+
+          if (partition == thread_num - 1){
+            
+            if (intarr[a] > intarr4[partition - 1]){
+              //printf("intarr[%ld] B22: %d\n", a, intarr[a]);
+              intarr5_size++;
+            }
+          }
+          else {
+            if (intarr[a] > intarr4[partition - 1] && intarr[a] <= intarr4[partition]){
+              //printf("intarr[%ld] B2: %d\n", a, intarr[a]);
+              intarr5_size++;
+            }
+          }
+        }
+      }
+      base = base + count[i];
+    }
+  }
+
+  printf("intarr5_size: %ld\n", intarr5_size);
+ 
+  // create intarr5
+  intarr5 = (unsigned int *)malloc((intarr5_size)*sizeof(unsigned int));
+
+  //------------------------------------------------------------------------------------------
+  // sub the elements of each partition in different threads
+
+  base = 0; 
+  for (int i = 0; i < thread_num; i++){ // know the thread number
+
+    if (i == 0){ // when thread is 0
+
+      for (long a = 0; a < count[i]; a++){ // loop in thread 0 from 0 
+        
+        if (partition == 0){ // if partition == 0;
+
+          if (intarr[a] <= intarr4[partition]){ 
+            intarr5[intarr5_index] = intarr[a];
+            intarr5_index++;
+          }
+        }
+        else if (partition > 0){
+
+          if (partition == thread_num - 1){
+            if (intarr[a] > intarr4[partition - 1]){
+              intarr5[intarr5_index] = intarr[a];
+              intarr5_index++;
+            }
+          }
+          else {
+            if (intarr[a] > intarr4[partition - 1] && intarr[a] <= intarr4[partition]){
+              intarr5[intarr5_index] = intarr[a];
+              intarr5_index++;
+            }
+          }
+        }
+      }
+
+      base = base + count[i];
+
+    }
+    else if (i > 0){
+      
+      for (long a = base; a < base + count[i]; a++){ //loop in thread 1 or more
+
+        if (partition == 0){
+
+          if (intarr[a] <= intarr4[partition]){ 
+            intarr5[intarr5_index] = intarr[a];
+            intarr5_index++;
+          }
+        }
+        else if (partition > 0){
+
+          if (partition == thread_num - 1){
+            
+            if (intarr[a] > intarr4[partition - 1]){
+              intarr5[intarr5_index] = intarr[a];
+              intarr5_index++;
+            }
+          }
+          else {
+            if (intarr[a] > intarr4[partition - 1] && intarr[a] <= intarr4[partition]){
+              intarr5[intarr5_index] = intarr[a];
+              intarr5_index++;
+            }
+          }
+        }
+      }
+      base = base + count[i];
+    }
+  }
+
+  qsort(intarr5, intarr5_size, sizeof(unsigned int), compare);
+
+  for (int i = 0; i < intarr5_size; i++){
+    printf("intarr5[%d]: %d\n", i, intarr5[i]);
+  }
+
+
+
   // do broadcast
   pthread_cond_broadcast(&myturn);
   thread_count1++;
 
-  /*long stop = 0;
-
-  // create intarr5
-  intarr5 = (unsigned int *)malloc((*thread_id + 1)*sizeof(unsigned int));
-
-  for(long i = 0; i < *thread_id + 1; i++){
-    intarr5[i] = 123;
-  }
-
-  for(long i = 0; i < *thread_id + 1; i++){
-    printf("intarr5[%ld]: %d\n", i, intarr5[i]);
-  }*/
 
 
   
@@ -286,9 +420,10 @@ int main (int argc, char **argv)
   }*/
 
   // print out intarr
-  /*for (i=0; i<size; i++) {
+  for (i=0; i<size; i++) {
     printf("intarr[%ld]: %d\n", i, intarr[i]);
-  }*/
+  }
+  printf("\n");
 
   for (int i = 1; i < thread_num; i++){
 
