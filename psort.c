@@ -2,10 +2,10 @@
 // The sequential version of the sorting using qsort
 
 /*
-# Filename: 
-# Student name and No.:
-# Development platform:
-# Remark:
+# Filename: psort_3035553020.c
+# Student name and No.: WAN, Ho Yin 3035553020
+# Development platform: WSL2
+# Remark: Completed all features
 */
 
 #include <stdio.h>
@@ -29,22 +29,23 @@ long size;  // size of the array
 unsigned int * intarr; // array of random integers
 unsigned int * intarr3; // array intarr3 for each worker threads selects p sample from it local sequence at indices.
 unsigned int * intarr4; // array intarr4 to store p-1 pivot value from intarr3
-unsigned int * intarr5; // array intarr5 to store the ith partition and collects from other threads thier 1 partitions
+//unsigned int * intarr5; // array intarr5 to store the ith partition and collects from other threads thier 1 partitions
 unsigned int * intarr6; // array intarr6 to store all sorted element.
 unsigned int * count; // store the value on or before ith partition
 int thread_num; // thread number 
 long intarr3_index = 0;
-long temp2 = 0; // store the index of intarr[] when put back intarr5[] into intarr[] 
+long temp2 = 0; // store the index of intarr6[] when put intarr5[] into intarr6[] 
 
 void * buckets (void *thread_ids){
 
   unsigned int * intarr2; // array for storing intarr partition. 
+  unsigned int * intarr5; // array intarr5 to store the ith partition and collects from other threads thier 1 partitions
 
   int * thread_id = (int *) thread_ids;
 
   double range = (double)size/ (double)thread_num;
  
-  // get the up, down, temp amd intarr5_size
+  // get the up, down, temp and intarr5_size, base, partition, and intarr5_index, count[]
   long down = (*thread_id) * range;
   long up = (*thread_id + 1) * range - 1;
   long temp = down;
@@ -58,14 +59,12 @@ void * buckets (void *thread_ids){
   // setup the size of intarr2
   intarr2 = (unsigned int *)malloc((up - down + 1)*sizeof(unsigned int)); 
 
-  pthread_mutex_lock(&bucket_locks);
   // sub intarr[] elements into intarr2[]
   for (long i = 0; i < (up - down + 1); i++){
 
     if(temp <= up)
     {
       intarr2[i] = intarr[temp];
-      //printf("intarr2[%ld]: %d     temp: %ld\n", i, intarr2[i], temp);
       temp++;
       
     }
@@ -75,57 +74,30 @@ void * buckets (void *thread_ids){
   // using quick sort to sort intarr2
   qsort(intarr2, (up-down+1), sizeof(unsigned int), compare);
 
-  for (long i=0; i<(up-down+1); i++) {
-
-    printf("intarr2[%ld]: %d ; thread_id: %d\n", i, intarr2[i], *thread_id);
-  }
-
-  printf("Count: %d", count[*thread_id]);
-
-  printf("\n\n");
-
-  /*if (!checking(intarr2, up-down+1)) {
-    printf("The array is not in sorted order!!\n");
-  }
-  else printf("The array is sorted!! \n\n");*/
-
   // sub intarr2[] elements into intarr[]
   for (long i = 0; i < (up - down + 1); i++){
 
     if(temp <= up)
     {
       intarr[temp] = intarr2[i];
-      printf("intarr[%ld]: %d \n", temp, intarr[temp]);
       temp++;
       
     }
        
   }
 
+  pthread_mutex_lock(&bucket_locks);
 
 
-  printf("thread_count: %d ; thread_id: %d\n\n", thread_count, *thread_id);
-
-  while(thread_count != *thread_id){
-    printf("thread %d waiting\n\n", *thread_id);
-    pthread_cond_wait(&myturn, &bucket_locks);
-  }
-
-  printf("Thread %d get back.\n", *thread_id);  
-
-  // each worker select thread_num samples from its 'local' sequence at indices
+  // each worker select thread_num samples from its 'local' sequence (intarr2[]) at index, and sub it to intarr3[]
   for (int i = 0; i < thread_num; i++){
 
     int index = i*size/(thread_num * thread_num);
     intarr3[intarr3_index] = intarr2[index];
     
-    //printf("Thread number: %d ; i: %d ; size: %ld  ", thread_num, i, size);
-    //printf("intarr3[%ld]: %d ; (i*size)/thread_num^2: %d\n", intarr3_index, intarr2[index], index);
     intarr3_index++;
   }
 
-  printf("I am thread %d. Range is %f, Down is %ld, Up is %ld\n", *thread_id, range, down, up);
-  //printf("I am thread %d.\n", *thread_id);
 
   // do broadcast
   pthread_cond_broadcast(&myturn);
@@ -133,24 +105,20 @@ void * buckets (void *thread_ids){
 
   pthread_mutex_unlock(&bucket_locks);
 
-  //step into phrase 3
+
+  //step into phrase 3 and 4
   pthread_mutex_lock(&bucket_locks);
 
   while(thread_count != thread_num + 1){
-    //printf("thread %d is waiting again\n\n", *thread_id);
     pthread_cond_wait(&myturn, &bucket_locks);
   }
 
-  while(thread_count1 != *thread_id){
-    //printf("thread %d is going to come back\n\n", *thread_id);
-    pthread_cond_wait(&myturn, &bucket_locks);
-  }
+  pthread_mutex_unlock(&bucket_locks);
 
-  printf("Thread %d come back\n", *thread_id);
 
   partition = *thread_id; // understand which partition 
 
-  // find out the elements of each partition in different threads
+  // find out the elements number (intarr5_size) of each partition in different threads
   for (int i = 0; i < thread_num; i++){ // know the thread number
 
     if (i == 0){ // when thread is 0
@@ -160,7 +128,6 @@ void * buckets (void *thread_ids){
         if (partition == 0){ // if partition == 0;
 
           if (intarr[a] <= intarr4[partition]){ 
-            //printf("intarr[%ld] A1: %d\n", a, intarr[a]);
             intarr5_size++;
           }
         }
@@ -168,13 +135,11 @@ void * buckets (void *thread_ids){
 
           if (partition == thread_num - 1){
             if (intarr[a] > intarr4[partition - 1]){
-              //printf("intarr[%ld] B11: %d\n", a, intarr[a]);
               intarr5_size++;
             }
           }
           else {
             if (intarr[a] > intarr4[partition - 1] && intarr[a] <= intarr4[partition]){
-              //printf("intarr[%ld] B1: %d\n", a, intarr[a]);
               intarr5_size++;
             }
           }
@@ -191,7 +156,6 @@ void * buckets (void *thread_ids){
         if (partition == 0){
 
           if (intarr[a] <= intarr4[partition]){ 
-            //printf("intarr[%ld] A2: %d\n", a, intarr[a]);
             intarr5_size++;
           }
         }
@@ -200,13 +164,11 @@ void * buckets (void *thread_ids){
           if (partition == thread_num - 1){
             
             if (intarr[a] > intarr4[partition - 1]){
-              //printf("intarr[%ld] B22: %d\n", a, intarr[a]);
               intarr5_size++;
             }
           }
           else {
             if (intarr[a] > intarr4[partition - 1] && intarr[a] <= intarr4[partition]){
-              //printf("intarr[%ld] B2: %d\n", a, intarr[a]);
               intarr5_size++;
             }
           }
@@ -216,13 +178,12 @@ void * buckets (void *thread_ids){
     }
   }
 
-  printf("intarr5_size: %ld\n", intarr5_size);
  
   // create intarr5
   intarr5 = (unsigned int *)malloc((intarr5_size)*sizeof(unsigned int));
 
   //------------------------------------------------------------------------------------------
-  // sub the elements of each partition in different threads
+  // sub the elements of each partition in different threads to intarr5[]
 
   base = 0; 
   for (int i = 0; i < thread_num; i++){ // know the thread number
@@ -260,7 +221,7 @@ void * buckets (void *thread_ids){
     }
     else if (i > 0){
       
-      for (long a = base; a < base + count[i]; a++){ //loop in thread 1 or more
+      for (long a = base; a < base + count[i]; a++){ //loop in thread 1 or above
 
         if (partition == 0){
 
@@ -292,18 +253,16 @@ void * buckets (void *thread_ids){
 
   qsort(intarr5, intarr5_size, sizeof(unsigned int), compare);
 
-  // print out sorted intarr5[];
-  for (int i = 0; i < intarr5_size; i++){
-    printf("intarr5[%d]: %d\n", i, intarr5[i]);
+  pthread_mutex_lock(&bucket_locks);
+  // make sure the thread sub element into intarr6[] according its thread_id in asc order 
+  while(thread_count1 != *thread_id){
+    pthread_cond_wait(&myturn, &bucket_locks);
   }
 
-  //printf("temp2: %ld\n", temp2);
-  // sub intarr5[] elements into intarr[]
+  // sub intarr5[] elements into intarr6[]
   for (long i = 0; i < intarr5_size; i++){
 
-      //printf("intarr5[]: %d\n", intarr5[i]);
       intarr6[temp2] = intarr5[i];
-      printf("intarr5[%ld]: %d \n", temp2, intarr6[temp2]);
       temp2++;  
   }
 
@@ -314,6 +273,7 @@ void * buckets (void *thread_ids){
   pthread_mutex_unlock(&bucket_locks);
 
   free(intarr2);
+  free(intarr5);
 
   pthread_exit(NULL);
 
@@ -337,7 +297,7 @@ int main (int argc, char **argv)
     thread_num = atol(argv[2]);
   
     if(thread_num > 1){
-      printf("thread_num: %d\n", thread_num);
+      //printf("thread_num: %d\n", thread_num);
     }
     else{
       printf("Please input thread number greater than 1.\n");
@@ -346,7 +306,6 @@ int main (int argc, char **argv)
   }
   else{
     thread_num = 4;
-      printf("thread_num: %d\n", thread_num);
   }
     
   // get the size of instarr
@@ -384,21 +343,13 @@ int main (int argc, char **argv)
   // put number to intarr randomly
   for (i=0; i<size; i++) {
     intarr[i] = random();
-    printf("intarr[%ld]: %d\n", i, intarr[i]);
   }
-
-  printf("----------------------------------------\n\n");
 
 
   // measure the start time
   gettimeofday(&start, NULL);
-  
-  // just call the qsort library
-  // replace qsort by your parallel sorting algorithm using pthread
 
-  //qsort(intarr, size, sizeof(unsigned int), compare);
-
-  // create threads
+  // create threads base on thread_num
   for (int i = 0; i < thread_num; i++){
     pthread_create(&threads[i], NULL, buckets, (void *)&thread_ids[i]);
   }
@@ -407,34 +358,16 @@ int main (int argc, char **argv)
 
   //ensure phrase one finish before entering phrase two
   while(thread_count != thread_num){
-    printf("main is waiting\n\n");
     pthread_cond_wait(&myturn, &bucket_locks);
   }
 
-  printf("the lock phrase one is finished\n\n");
-
   qsort(intarr3, thread_num*thread_num, sizeof(unsigned int), compare);
 
-  // print out intarr3
-  /*for (int i = 0; i < thread_num * thread_num; i++){
-    printf("intarr3[%d]: %d\n", i, intarr3[i]);
-  }*/
-
-  // print out intarr
-  for (i=0; i<size; i++) {
-    printf("intarr[%ld]: %d\n", i, intarr[i]);
-  }
-  printf("\n");
-
+  // select the pivot values in intarr3[] and sub it to intarr4[]
   for (int i = 1; i < thread_num; i++){
 
     int t = i*thread_num + (thread_num/2) - 1;
-    //printf("t = %d\n", intarr3[t]);
     intarr4[i-1] = intarr3[t];
-  }
-
-  for (int i = 0; i < thread_num - 1; i++){
-    printf("intarr4[%d]: %d\n", i, intarr4[i]);
   }
 
   thread_count++;
@@ -453,22 +386,22 @@ int main (int argc, char **argv)
   gettimeofday(&end, NULL);
 
 
-
+  intarr = intarr6;
   pthread_mutex_destroy(&bucket_locks);
 
   
   // check whether intar6 is in sorted order
-  if (!checking(intarr6, size)) {
+  if (!checking(intarr, size)) {
     printf("The array is not in sorted order!!\n");
   }
+  //else printf("array is sorted --------\n");
   
   printf("Total elapsed time: %.4f s\n\n", (end.tv_sec - start.tv_sec)*1.0 + (end.tv_usec - start.tv_usec)/1000000.0);
-    
-  free(intarr);
+  
+  /*free(intarr6);
+  free(intarr);*/
   free(intarr3);
   free(intarr4);
-  free(intarr5);
-  free(intarr6);
   pthread_cond_destroy(&myturn);
   return 0;
 }
